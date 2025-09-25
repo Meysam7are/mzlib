@@ -93,6 +93,7 @@ namespace mz {
 		}
 		
 
+
 		/**
 		 * @brief Construct from a span_view struct.
 		 */
@@ -609,5 +610,4 @@ struct std::formatter<mz::Span<T>> : public mz::basic_formatter16 {
 
 
 #endif // MZ_SPAN_HEADER_FILE
-
 
