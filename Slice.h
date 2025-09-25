@@ -1,3 +1,26 @@
+/*
+ * MIT License
+ * Copyright (c) 2022-2025 Meysam Zare
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #ifndef MZ_SLICE_HEADER_FILE
 #define MZ_SLICE_HEADER_FILE
 #pragma once
@@ -6,6 +29,7 @@
 #include <type_traits>
 #include "Span.h"
 #include "ElementwiseOperationsInterface.h"
+#include "RandomAccessIteratorInterface.h"
 
 namespace mz {
 
@@ -25,6 +49,7 @@ namespace mz {
         using reference = value_type&;
         using const_pointer = value_type const*;
         using const_reference = mz::return_cvref_t<value_type>::type;
+        using difference_type = std::ptrdiff_t;
 
     private:
         // --- Data Members ---
@@ -51,7 +76,7 @@ namespace mz {
         /**
          * @brief Assign from a slice_view.
          */
-        constexpr Slice& operator = (slice_view sv) noexcept { m_data = sv.m_data; m_size = sv.m_size; return *this; }
+        constexpr Slice& operator = (slice_view sv) noexcept { m_data = sv.m_data; m_size = sv.m_size; m_step = sv.m_step; return *this; }
 
         /**
          * @brief Get a slice_view representing this slice.
@@ -129,7 +154,6 @@ namespace mz {
         template <typename Q>
         __inline constexpr Slice<std::remove_cvref_t<Q> const> cast_as() const noexcept {
             return Slice<std::remove_cvref_t<Q> const>{static_cast_as<std::remove_cvref_t<Q> const>(m_data), m_size, m_step};
-            return const_cast<Slice*>(this)->cast_as<Q const>();
         }
 
         // --- Validity and Properties ---
@@ -186,6 +210,69 @@ namespace mz {
          */
         constexpr reference operator[](size_type index) { return m_data[index * m_step]; }
         constexpr const_reference operator[](size_type index) const noexcept { return m_data[index * m_step]; }
+
+
+        // --- Iterator Interface Requirements ---
+        // These methods are needed by the RandomAccessIteratorInterface
+        constexpr reference get_lvalue(std::ptrdiff_t index) noexcept {
+            return m_data[index * m_step];
+        }
+
+        constexpr const_reference get_lvalue(std::ptrdiff_t index) const noexcept {
+            return m_data[index * m_step];
+        }
+
+        constexpr pointer get_pointer(std::ptrdiff_t index) noexcept {
+            return &m_data[index * m_step];
+        }
+
+        constexpr const_pointer get_pointer(std::ptrdiff_t index) const noexcept {
+            return &m_data[index * m_step];
+        }
+
+
+        // --- Iterator Interface ---
+        /**
+         * @brief Get an iterator to the beginning of the slice.
+         */
+        constexpr auto begin() noexcept {
+            return mz::MutableRandomAccessIteratorInterface<Slice>(this, 0);
+        }
+
+        /**
+         * @brief Get an iterator to the end of the slice.
+         */
+        constexpr auto end() noexcept {
+            return mz::MutableRandomAccessIteratorInterface<Slice>(this, m_size);
+        }
+
+        /**
+         * @brief Get a const iterator to the beginning of the slice.
+         */
+        constexpr auto begin() const noexcept {
+            return mz::ConstRandomAccessIteratorInterface<Slice>(const_cast<Slice*>(this), 0);
+        }
+
+        /**
+         * @brief Get a const iterator to the end of the slice.
+         */
+        constexpr auto end() const noexcept {
+            return mz::ConstRandomAccessIteratorInterface<Slice>(const_cast<Slice*>(this), m_size);
+        }
+
+        /**
+         * @brief Get a const iterator to the beginning of the slice.
+         */
+        constexpr auto cbegin() const noexcept {
+            return mz::ConstRandomAccessIteratorInterface<Slice>(const_cast<Slice*>(this), 0);
+        }
+
+        /**
+         * @brief Get a const iterator to the end of the slice.
+         */
+        constexpr auto cend() const noexcept {
+            return mz::ConstRandomAccessIteratorInterface<Slice>(const_cast<Slice*>(this), m_size);
+        }
 
         // --- Elementwise Assignment ---
         /**
@@ -282,7 +369,8 @@ namespace mz {
         using reference = mz::return_cvref_t<value_type>::type;
         using const_pointer = value_type const*;
         using const_reference = mz::return_cvref_t<value_type>::type;
-        using container_t = typename mz::Span<const_type>;
+        using difference_type = std::ptrdiff_t;
+    
 
     private:
         pointer m_data{ nullptr };
@@ -336,8 +424,49 @@ namespace mz {
         constexpr usize_type usize() const noexcept { return static_cast<usize_type>(m_size); }
         constexpr usize_type ustep() const noexcept { return static_cast<usize_type>(m_step); }
 
+        // --- Data Access ---
+        constexpr const_pointer data() const noexcept { return m_data; }
+
         // --- Element Access ---
         constexpr const_reference operator[](index_type index) const noexcept { return m_data[index * m_step]; }
+
+        // --- Iterator Interface Requirements ---
+        constexpr const_reference get_lvalue(std::ptrdiff_t index) const noexcept {
+            return m_data[index * m_step];
+        }
+
+        constexpr const_pointer get_pointer(std::ptrdiff_t index) const noexcept {
+            return &m_data[index * m_step];
+        }
+
+        // --- Iterator Interface ---
+        /**
+         * @brief Get a const iterator to the beginning of the slice.
+         */
+        constexpr auto begin() const noexcept {
+            return mz::ConstRandomAccessIteratorInterface<Slice>(const_cast<Slice*>(this), 0);
+        }
+
+        /**
+         * @brief Get a const iterator to the end of the slice.
+         */
+        constexpr auto end() const noexcept {
+            return mz::ConstRandomAccessIteratorInterface<Slice>(const_cast<Slice*>(this), m_size);
+        }
+
+        /**
+         * @brief Get a const iterator to the beginning of the slice.
+         */
+        constexpr auto cbegin() const noexcept {
+            return mz::ConstRandomAccessIteratorInterface<Slice>(const_cast<Slice*>(this), 0);
+        }
+
+        /**
+         * @brief Get a const iterator to the end of the slice.
+         */
+        constexpr auto cend() const noexcept {
+            return mz::ConstRandomAccessIteratorInterface<Slice>(const_cast<Slice*>(this), m_size);
+        }
 
         // --- Utility ---
         __inline constexpr auto&& Func() const noexcept { return [&](auto i) constexpr noexcept -> const_reference { return operator[](i); }; }
